@@ -200,11 +200,13 @@ def main():
     z0 = 0.5
     Zg = np.full_like(Xg, z0)
 
-    fig, axes = plt.subplots(1, 2, figsize=(10, 4))
-    im_pred = axes[0].imshow(np.zeros_like(Xg), extent=[-1, 1, -1, 1], origin="lower", vmin=-1, vmax=1)
-    axes[0].set_title("Predicted u")
-    im_err = axes[1].imshow(np.zeros_like(Xg), extent=[-1, 1, -1, 1], origin="lower", vmin=0, vmax=1)
-    axes[1].set_title("|u - u_exact|")
+    fig, axes = plt.subplots(1, 3, figsize=(15, 4))
+    im_exact = axes[0].imshow(np.zeros_like(Xg), extent=[-1, 1, -1, 1], origin="lower", vmin=-1, vmax=1)
+    axes[0].set_title("Exact u")
+    im_pred = axes[1].imshow(np.zeros_like(Xg), extent=[-1, 1, -1, 1], origin="lower", vmin=-1, vmax=1)
+    axes[1].set_title("Predicted u")
+    im_err = axes[2].imshow(np.zeros_like(Xg), extent=[-1, 1, -1, 1], origin="lower", vmin=0, vmax=1)
+    axes[2].set_title("|u - u_exact|")
 
     def update(frame):
         t = np.full_like(Xg, frame)
@@ -212,15 +214,18 @@ def main():
         preds = model.predict(X_input)[:, 0].reshape(grid_size, grid_size)
         exact = p_func(X_input).reshape(grid_size, grid_size)
         err = np.abs(preds - exact)
+        im_exact.set_data(exact)
+        im_exact.set_clim(exact.min(), exact.max())
         im_pred.set_data(preds)
         vmin, vmax = preds.min(), preds.max()
         im_pred.set_clim(vmin, vmax)
         # 誤差マップの表示更新
         im_err.set_data(err)
-        im_err.set_clim(err.min(), err.max()) 
+        im_err.set_clim(err.min(), err.max())
         axes[0].set_xlabel(f"t = {frame:.2f}")
         axes[1].set_xlabel(f"t = {frame:.2f}")
-        return im_pred, im_err
+        axes[2].set_xlabel(f"t = {frame:.2f}")
+        return im_exact, im_pred, im_err
 
     times = np.linspace(0, 1, 20)
     ani = FuncAnimation(fig, update, frames=times, blit=False)
