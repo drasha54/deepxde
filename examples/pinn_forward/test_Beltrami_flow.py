@@ -1,8 +1,9 @@
-"""Backend supported: tensorflow.compat.v1, tensorflow, pytorch, paddle"""
-import deepxde as dde
+import glob
 import numpy as np
+import deepxde as dde
 
 
+# Problem constants
 a = 1
 d = 1
 Re = 1
@@ -144,8 +145,7 @@ initial_condition_w = dde.icbc.IC(
     spatio_temporal_domain, w_func, lambda _, on_initial: on_initial, component=2
 )
 
-if __name__ == "__main__":
-
+def load_model():
     data = dde.data.TimePDE(
         spatio_temporal_domain,
         pde,
@@ -157,85 +157,30 @@ if __name__ == "__main__":
             initial_condition_v,
             initial_condition_w,
         ],
-        num_domain=50000,
-        num_boundary=5000,
-        num_initial=5000,
-        num_test=10000,
+        num_domain=10,
+        num_boundary=2,
+        num_initial=2,
+        num_test=10,
     )
 
     net = dde.nn.FNN([4] + 4 * [50] + [4], "tanh", "Glorot normal")
-
     model = dde.Model(data, net)
+    model.compile("adam", lr=1e-3)
+    path = sorted(glob.glob("Beltrami_flow_model*"))[-1]
+    model.restore(path, verbose=1)
+    return model
 
-    model.compile(
-        "adam", lr=1e-3, loss_weights=[1, 1, 1, 1, 100, 100, 100, 100, 100, 100]
-    )
-    model.train(iterations=30000)
-    model.compile("L-BFGS", loss_weights=[1, 1, 1, 1, 100, 100, 100, 100, 100, 100])
-    losshistory, train_state = model.train()
-
+def main():
+    model = load_model()
     x, y, z = np.meshgrid(
         np.linspace(-1, 1, 10), np.linspace(-1, 1, 10), np.linspace(-1, 1, 10)
     )
-
     X = np.vstack((np.ravel(x), np.ravel(y), np.ravel(z))).T
+    t = np.zeros((X.shape[0], 1))
+    X_input = np.hstack((X, t))
+    preds = model.predict(X_input)
+    print(preds[:5])
 
-    t_0 = np.zeros(1000).reshape(1000, 1)
-    t_1 = np.ones(1000).reshape(1000, 1)
 
-    X_0 = np.hstack((X, t_0))
-    X_1 = np.hstack((X, t_1))
-
-    output_0 = model.predict(X_0)
-    output_1 = model.predict(X_1)
-
-    u_pred_0 = output_0[:, 0].reshape(-1)
-    v_pred_0 = output_0[:, 1].reshape(-1)
-    w_pred_0 = output_0[:, 2].reshape(-1)
-    p_pred_0 = output_0[:, 3].reshape(-1)
-
-    u_exact_0 = u_func(X_0).reshape(-1)
-    v_exact_0 = v_func(X_0).reshape(-1)
-    w_exact_0 = w_func(X_0).reshape(-1)
-    p_exact_0 = p_func(X_0).reshape(-1)
-
-    u_pred_1 = output_1[:, 0].reshape(-1)
-    v_pred_1 = output_1[:, 1].reshape(-1)
-    w_pred_1 = output_1[:, 2].reshape(-1)
-    p_pred_1 = output_1[:, 3].reshape(-1)
-
-    u_exact_1 = u_func(X_1).reshape(-1)
-    v_exact_1 = v_func(X_1).reshape(-1)
-    w_exact_1 = w_func(X_1).reshape(-1)
-    p_exact_1 = p_func(X_1).reshape(-1)
-
-    f_0 = model.predict(X_0, operator=pde)
-    f_1 = model.predict(X_1, operator=pde)
-
-    l2_difference_u_0 = dde.metrics.l2_relative_error(u_exact_0, u_pred_0)
-    l2_difference_v_0 = dde.metrics.l2_relative_error(v_exact_0, v_pred_0)
-    l2_difference_w_0 = dde.metrics.l2_relative_error(w_exact_0, w_pred_0)
-    l2_difference_p_0 = dde.metrics.l2_relative_error(p_exact_0, p_pred_0)
-    residual_0 = np.mean(np.absolute(f_0))
-
-    l2_difference_u_1 = dde.metrics.l2_relative_error(u_exact_1, u_pred_1)
-    l2_difference_v_1 = dde.metrics.l2_relative_error(v_exact_1, v_pred_1)
-    l2_difference_w_1 = dde.metrics.l2_relative_error(w_exact_1, w_pred_1)
-    l2_difference_p_1 = dde.metrics.l2_relative_error(p_exact_1, p_pred_1)
-    residual_1 = np.mean(np.absolute(f_1))
-
-    print("Accuracy at t = 0:")
-    print("Mean residual:", residual_0)
-    print("L2 relative error in u:", l2_difference_u_0)
-    print("L2 relative error in v:", l2_difference_v_0)
-    print("L2 relative error in w:", l2_difference_w_0)
-    print("\n")
-    print("Accuracy at t = 1:")
-    print("Mean residual:", residual_1)
-    print("L2 relative error in u:", l2_difference_u_1)
-    print("L2 relative error in v:", l2_difference_v_1)
-    print("L2 relative error in w:", l2_difference_w_1)
-
-    # Save the trained model
-    save_path = model.save("Beltrami_flow_model")
-    print(f"Model saved to {save_path}")
+if __name__ == "__main__":
+    main()
