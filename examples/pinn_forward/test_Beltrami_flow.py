@@ -1,7 +1,7 @@
 import glob
 import numpy as np
 import deepxde as dde
-
+import torch
 
 # Problem constants
 a = 1
@@ -166,11 +166,24 @@ def load_model():
     net = dde.nn.FNN([4] + 4 * [50] + [4], "tanh", "Glorot normal")
     model = dde.Model(data, net)
     model.compile("adam", lr=1e-3)
+    '''
     try:
         path = sorted(glob.glob("Beltrami_flow_model*"))[-1]
-        model.restore(path, verbose=1)
+        #model.restore(path, verbose=1)
+        model.restore(path, only_weights=True, verbose=1)
     except (IndexError, FileNotFoundError):
         print("Pretrained model not found. Using randomly initialized weights.")
+    return model
+    '''
+    try:
+        path = sorted(glob.glob("Beltrami_flow_model*"))[-1]
+        # torch.load で checkpoint を読み込み
+        ckpt = torch.load(path, map_location=torch.device("cpu"))
+        # 'model_state_dict' のみ取り出してネットワークに適用
+        model.net.load_state_dict(ckpt["model_state_dict"])
+        print(f"Loaded weights from {path}")
+    except (IndexError, FileNotFoundError, KeyError) as e:
+        print("Pretrained model not found or invalid checkpoint, using random init:", e)
     return model
 
 def main():
@@ -183,29 +196,35 @@ def main():
     x = np.linspace(-1, 1, grid_size)
     y = np.linspace(-1, 1, grid_size)
     Xg, Yg = np.meshgrid(x, y)
-    Zg = np.zeros_like(Xg)
+    #z平面を指定
+    z0 = 0.5
+    Zg = np.full_like(Xg, z0)
 
     fig, axes = plt.subplots(1, 2, figsize=(10, 4))
     im_pred = axes[0].imshow(np.zeros_like(Xg), extent=[-1, 1, -1, 1], origin="lower", vmin=-1, vmax=1)
-    axes[0].set_title("Predicted p")
+    axes[0].set_title("Predicted u")
     im_err = axes[1].imshow(np.zeros_like(Xg), extent=[-1, 1, -1, 1], origin="lower", vmin=0, vmax=1)
-    axes[1].set_title("|p - p_exact|")
+    axes[1].set_title("|u - u_exact|")
 
     def update(frame):
         t = np.full_like(Xg, frame)
         X_input = np.stack([Xg, Yg, Zg, t], axis=-1).reshape(-1, 4)
-        preds = model.predict(X_input)[:, 3].reshape(grid_size, grid_size)
+        preds = model.predict(X_input)[:, 0].reshape(grid_size, grid_size)
         exact = p_func(X_input).reshape(grid_size, grid_size)
         err = np.abs(preds - exact)
         im_pred.set_data(preds)
+        vmin, vmax = preds.min(), preds.max()
+        im_pred.set_clim(vmin, vmax)
+        # 誤差マップの表示更新
         im_err.set_data(err)
+        im_err.set_clim(err.min(), err.max()) 
         axes[0].set_xlabel(f"t = {frame:.2f}")
         axes[1].set_xlabel(f"t = {frame:.2f}")
         return im_pred, im_err
 
     times = np.linspace(0, 1, 20)
     ani = FuncAnimation(fig, update, frames=times, blit=False)
-    ani.save("p_prediction.gif", writer=PillowWriter(fps=2))
+    ani.save("u_prediction.gif", writer=PillowWriter(fps=2))
 
     plt.close(fig)
 
