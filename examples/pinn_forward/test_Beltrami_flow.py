@@ -166,20 +166,48 @@ def load_model():
     net = dde.nn.FNN([4] + 4 * [50] + [4], "tanh", "Glorot normal")
     model = dde.Model(data, net)
     model.compile("adam", lr=1e-3)
-    path = sorted(glob.glob("Beltrami_flow_model*"))[-1]
-    model.restore(path, verbose=1)
+    try:
+        path = sorted(glob.glob("Beltrami_flow_model*"))[-1]
+        model.restore(path, verbose=1)
+    except (IndexError, FileNotFoundError):
+        print("Pretrained model not found. Using randomly initialized weights.")
     return model
 
 def main():
+    import matplotlib.pyplot as plt
+    from matplotlib.animation import FuncAnimation, PillowWriter
+
     model = load_model()
-    x, y, z = np.meshgrid(
-        np.linspace(-1, 1, 10), np.linspace(-1, 1, 10), np.linspace(-1, 1, 10)
-    )
-    X = np.vstack((np.ravel(x), np.ravel(y), np.ravel(z))).T
-    t = np.zeros((X.shape[0], 1))
-    X_input = np.hstack((X, t))
-    preds = model.predict(X_input)
-    print(preds[:5])
+
+    grid_size = 50
+    x = np.linspace(-1, 1, grid_size)
+    y = np.linspace(-1, 1, grid_size)
+    Xg, Yg = np.meshgrid(x, y)
+    Zg = np.zeros_like(Xg)
+
+    fig, axes = plt.subplots(1, 2, figsize=(10, 4))
+    im_pred = axes[0].imshow(np.zeros_like(Xg), extent=[-1, 1, -1, 1], origin="lower", vmin=-1, vmax=1)
+    axes[0].set_title("Predicted p")
+    im_err = axes[1].imshow(np.zeros_like(Xg), extent=[-1, 1, -1, 1], origin="lower", vmin=0, vmax=1)
+    axes[1].set_title("|p - p_exact|")
+
+    def update(frame):
+        t = np.full_like(Xg, frame)
+        X_input = np.stack([Xg, Yg, Zg, t], axis=-1).reshape(-1, 4)
+        preds = model.predict(X_input)[:, 3].reshape(grid_size, grid_size)
+        exact = p_func(X_input).reshape(grid_size, grid_size)
+        err = np.abs(preds - exact)
+        im_pred.set_data(preds)
+        im_err.set_data(err)
+        axes[0].set_xlabel(f"t = {frame:.2f}")
+        axes[1].set_xlabel(f"t = {frame:.2f}")
+        return im_pred, im_err
+
+    times = np.linspace(0, 1, 20)
+    ani = FuncAnimation(fig, update, frames=times, blit=False)
+    ani.save("p_prediction.gif", writer=PillowWriter(fps=2))
+
+    plt.close(fig)
 
 
 if __name__ == "__main__":
