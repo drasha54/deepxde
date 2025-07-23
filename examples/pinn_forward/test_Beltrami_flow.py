@@ -201,12 +201,18 @@ def main():
     Zg = np.full_like(Xg, z0)
 
     fig, axes = plt.subplots(1, 3, figsize=(15, 4))
-    im_exact = axes[0].imshow(np.zeros_like(Xg), extent=[-1, 1, -1, 1], origin="lower", vmin=-1, vmax=1)
+    im_exact = axes[0].imshow(np.zeros_like(Xg), extent=[-1, 1, -1, 1], origin="lower")
     axes[0].set_title("Exact u")
-    im_pred = axes[1].imshow(np.zeros_like(Xg), extent=[-1, 1, -1, 1], origin="lower", vmin=-1, vmax=1)
+    im_pred = axes[1].imshow(np.zeros_like(Xg), extent=[-1, 1, -1, 1], origin="lower")
     axes[1].set_title("Predicted u")
-    im_err = axes[2].imshow(np.zeros_like(Xg), extent=[-1, 1, -1, 1], origin="lower", vmin=0, vmax=1)
+    im_err = axes[2].imshow(np.zeros_like(Xg), extent=[-1, 1, -1, 1], origin="lower")
     axes[2].set_title("|u - u_exact|")
+
+    # Colorbars: one shared by exact and predicted values, and one for the error
+    cbar_uv = fig.colorbar(im_exact, ax=axes[:2])
+    cbar_uv.set_label("u value")
+    cbar_err = fig.colorbar(im_err, ax=axes[2])
+    cbar_err.set_label("Error")
 
     def update(frame):
         t = np.full_like(Xg, frame)
@@ -214,14 +220,18 @@ def main():
         preds = model.predict(X_input)[:, 0].reshape(grid_size, grid_size)
         exact = p_func(X_input).reshape(grid_size, grid_size)
         err = np.abs(preds - exact)
+        # Use common color limits for exact and predicted values
+        vmin = min(exact.min(), preds.min())
+        vmax = max(exact.max(), preds.max())
         im_exact.set_data(exact)
-        im_exact.set_clim(exact.min(), exact.max())
+        im_exact.set_clim(vmin, vmax)
         im_pred.set_data(preds)
-        vmin, vmax = preds.min(), preds.max()
         im_pred.set_clim(vmin, vmax)
         # 誤差マップの表示更新
         im_err.set_data(err)
         im_err.set_clim(err.min(), err.max())
+        cbar_uv.update_normal(im_exact)
+        cbar_err.update_normal(im_err)
         axes[0].set_xlabel(f"t = {frame:.2f}")
         axes[1].set_xlabel(f"t = {frame:.2f}")
         axes[2].set_xlabel(f"t = {frame:.2f}")
