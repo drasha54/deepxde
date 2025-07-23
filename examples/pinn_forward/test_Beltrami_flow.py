@@ -176,7 +176,11 @@ def load_model():
     return model
     '''
     try:
-        path = sorted(glob.glob("Beltrami_flow_model*"))[-1]
+        # examples ディレクトリではなく /home/nagano/deepxde を検索
+        candidates = sorted(glob.glob("/home/nagano/deepxde/Beltrami_flow_model-*.pt"))
+        if not candidates:
+            raise FileNotFoundError("No checkpoint found in /home/nagano/deepxde")
+        path = candidates[-1]
         # torch.load で checkpoint を読み込み
         ckpt = torch.load(path, map_location=torch.device("cpu"))
         # 'model_state_dict' のみ取り出してネットワークに適用
@@ -224,18 +228,18 @@ def main():
         vmin = min(exact.min(), preds.min())
         vmax = max(exact.max(), preds.max())
         im_exact.set_data(exact)
-        im_exact.set_clim(vmin, vmax)
+        im_exact.set_clim(-3, 3)
         im_pred.set_data(preds)
-        im_pred.set_clim(vmin, vmax)
+        im_pred.set_clim(-3, 3)
         # 誤差マップの表示更新
         im_err.set_data(err)
-        im_err.set_clim(err.min(), err.max())
+        im_err.set_clim(0, 3)
         cbar_uv.update_normal(im_exact)
         cbar_err.update_normal(im_err)
         axes[0].set_xlabel(f"t = {frame:.2f}")
         axes[1].set_xlabel(f"t = {frame:.2f}")
         axes[2].set_xlabel(f"t = {frame:.2f}")
-        return im_exact, im_pred, im_err
+        return [im_exact, im_pred, im_err, cbar_uv.ax, cbar_err.ax]
 
     times = np.linspace(0, 1, 20)
     ani = FuncAnimation(fig, update, frames=times, blit=False)
